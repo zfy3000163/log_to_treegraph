@@ -131,10 +131,11 @@ class Log_to_graph():
         """
         tree = tree_opt()
         data = tree.one_dim(logdata)
+        body = ''
         for l in data:
-            tree.parse(l)
+            body += tree.parse(l)
 
-        fd.write(tree.bodystr)
+        fd.write(body)
 
         """
         write tail
@@ -211,9 +212,11 @@ class tree_opt():
 
     def parse(self, tr=None):
         assert(tr)
+        self.bodystr = '' 
         self.bodystr += ("<ul><li>\n")
         self.parse_parent(tr)
         self.bodystr += ("</li></ul>\n")
+        return self.bodystr
 
     def rgb2hex(self, rgbcolor):
         Red, Green, Blue = rgbcolor
