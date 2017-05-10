@@ -212,7 +212,7 @@ class Log_to_graph(tree_opt):
         data = super(Log_to_graph, self).one_dim(logdata)
         #body = ''
         for l in data:
-            tree_opt.parse(self, l)
+            #tree_opt.parse(self, l)
             super(Log_to_graph, self).parse(l)
 
         fd.write(self.bodystr)
