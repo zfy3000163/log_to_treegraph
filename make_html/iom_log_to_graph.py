@@ -10,7 +10,86 @@ import pdb
 
 Level=50
 
-class Log_to_graph():
+class tree_opt(object):
+    def __init__(self):
+        self.bodystr=""
+
+    def one_dim(self, lists):
+        l_new=[j for i in lists for j in i]
+        return l_new
+
+
+    def get_child(self, child=None):
+        if isinstance(child,dict):
+            if child:
+                child_lists = child.get("child",None)
+                #one_dim(child_lists)
+                return child_lists
+            else:
+                return None
+
+    def parse_child(self, tr=None):
+        child = tr['child']
+        """
+        case:child is None, same parent tree.
+        """
+        if  child:
+            self.parse_parent(tr)
+        else:
+            html_span = "<span><i class=\"\"></i> %s</span>\n" % (tr['name'])
+            self.bodystr += (html_span)
+            html_canvas = "<a  title=\"(BeginTime: %s)    (EndTime: %s)    (UsedTime: %s)\">\n \
+                    <canvas width=%s height=\"10\" style=\"border:2px solid #%s ;\"></canvas>\n</a>\n" \
+                    % (tr['arg']['start_time'], tr['arg']['stop_time'], tr['arg']['used_time'], \
+                    Level if tr['arg']['used_time'] == 'ERROR' else Level*float(tr['arg']['used_time']),\
+                    self.rgb2hex(tr['arg']['color']))
+            self.bodystr += (html_canvas)
+            return None
+
+
+
+    def parse_parent(self, tr=None):
+        assert(tr)
+        #pdb.set_trace()
+        html_span = "<span><i class=\"class-minus\"></i> %s</span>\n" % (tr['name'])
+        self.bodystr += html_span
+        html_canvas = "<a title=\"(BeginTime: %s)    (EndTime: %s)    (UsedTime: %s)\">\n \
+                <canvas width=%s height=\"10\" style=\"border:2px solid #%s ;\"></canvas>\n</a>\n" \
+                % (tr['arg']['start_time'], tr['arg']['stop_time'], tr['arg']['used_time'], \
+                Level if tr['arg']['used_time'] == 'ERROR' else Level*float(tr['arg']['used_time']), \
+                self.rgb2hex(tr['arg']['color']))
+
+        self.bodystr += html_canvas
+        self.bodystr += "<ul>\n"
+
+        child = self.get_child(tr)
+        if child:
+            for l in child:
+                self.bodystr += ("<li>\n")
+                self.parse_child(l)
+                self.bodystr += ("</li>\n")
+
+        self.bodystr += ("</ul>\n")
+
+    def parse(self, tr=None):
+        assert(tr)
+        #self.bodystr = ''
+        self.bodystr += ("<ul><li>\n")
+        self.parse_parent(tr)
+        self.bodystr += ("</li></ul>\n")
+        #return self.bodystr
+
+    def rgb2hex(self, rgbcolor):
+        Red, Green, Blue = rgbcolor
+        HEX = '%02x%02x%02x' % (Red, Green, Blue)
+        return HEX
+
+
+class Log_to_graph(tree_opt):
+
+    def __init__(self):
+        #tree_opt.__init__(self)
+        super(Log_to_graph, self).__init__()
 
     def file_format(self, filename=None):
         #pdb.set_trace()
@@ -129,13 +208,14 @@ class Log_to_graph():
         """
         write body
         """
-        tree = tree_opt()
-        data = tree.one_dim(logdata)
-        body = ''
+        #data = tree_opt.one_dim(self, logdata)
+        data = super(Log_to_graph, self).one_dim(logdata)
+        #body = ''
         for l in data:
-            body += tree.parse(l)
+            tree_opt.parse(self, l)
+            super(Log_to_graph, self).parse(l)
 
-        fd.write(body)
+        fd.write(self.bodystr)
 
         """
         write tail
@@ -148,80 +228,6 @@ class Log_to_graph():
         fd.close()
 
 
-
-class tree_opt():
-    def __init__(self):
-        self.bodystr=""
-
-    def one_dim(self, lists):
-        l_new=[j for i in lists for j in i]
-        return l_new
-
-
-    def get_child(self, child=None):
-        if isinstance(child,dict):
-            if child:
-                child_lists = child.get("child",None)
-                #one_dim(child_lists)
-                return child_lists
-            else:
-                return None
-
-    def parse_child(self, tr=None):
-        child = tr['child']
-        """
-        case:child is None, same parent tree.
-        """
-        if  child:
-            self.parse_parent(tr)
-        else:
-            html_span = "<span><i class=\"\"></i> %s</span>\n" % (tr['name'])
-            self.bodystr += (html_span)
-            html_canvas = "<a  title=\"(BeginTime: %s)    (EndTime: %s)    (UsedTime: %s)\">\n \
-                    <canvas width=%s height=\"10\" style=\"border:2px solid #%s ;\"></canvas>\n</a>\n" \
-                    % (tr['arg']['start_time'], tr['arg']['stop_time'], tr['arg']['used_time'], \
-                    Level if tr['arg']['used_time'] == 'ERROR' else Level*float(tr['arg']['used_time']),\
-                    self.rgb2hex(tr['arg']['color']))
-            self.bodystr += (html_canvas)
-            return None
-
-
-
-    def parse_parent(self, tr=None):
-        assert(tr)
-        #pdb.set_trace()
-        html_span = "<span><i class=\"class-minus\"></i> %s</span>\n" % (tr['name'])
-        self.bodystr += html_span
-        html_canvas = "<a title=\"(BeginTime: %s)    (EndTime: %s)    (UsedTime: %s)\">\n \
-                <canvas width=%s height=\"10\" style=\"border:2px solid #%s ;\"></canvas>\n</a>\n" \
-                % (tr['arg']['start_time'], tr['arg']['stop_time'], tr['arg']['used_time'], \
-                Level if tr['arg']['used_time'] == 'ERROR' else Level*float(tr['arg']['used_time']), \
-                self.rgb2hex(tr['arg']['color']))
-
-        self.bodystr += html_canvas
-        self.bodystr += "<ul>\n"
-
-        child = self.get_child(tr)
-        if child:
-            for l in child:
-                self.bodystr += ("<li>\n")
-                self.parse_child(l)
-                self.bodystr += ("</li>\n")
-
-        self.bodystr += ("</ul>\n")
-
-    def parse(self, tr=None):
-        assert(tr)
-        self.bodystr = '' 
-        self.bodystr += ("<ul><li>\n")
-        self.parse_parent(tr)
-        self.bodystr += ("</li></ul>\n")
-        return self.bodystr
-
-    def rgb2hex(self, rgbcolor):
-        Red, Green, Blue = rgbcolor
-        HEX = '%02x%02x%02x' % (Red, Green, Blue)
-        return HEX
 
 
 """
