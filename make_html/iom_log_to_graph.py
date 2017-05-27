@@ -112,6 +112,8 @@ class Log_to_graph(tree_opt):
 
         stack_list=[]
         output_list=[]
+        wait_list=[]
+        wait_dict=[]
         tmp_list=[]
         arg_list=[]
         tree_dict={}
@@ -119,7 +121,6 @@ class Log_to_graph(tree_opt):
         while True:
             line = logfile.readline()
             if line:
-                #print "line:%s\n\n" % line
                 if isiom.search(line):
                     line = line[0:-1]
                     requestid = findid.search(splitre.search(line).group(0)).group(0)
@@ -146,6 +147,27 @@ class Log_to_graph(tree_opt):
                         tree_dict={'name':splited[5], 'arg':record, 'child':[]}
                         stack_list.append(tree_dict)
                     else:
+                        """travers the wait_list
+                        """
+                        def wait_process():
+                            if wait_list and stack_list:
+                                for wl in wait_list:
+                                    if wl['name'] == stack_list[-1]['name']:
+                                        stack_list[-1]['arg']['used_time'] = wl['used_time']
+                                        stack_list[-1]['arg']['stop_time'] = wl['stop_time']
+                                        stack_list[-1]['arg']['color'] = wl['color']
+
+                                        if stack_list[0]['name'] == wl['name']:
+                                            tmp_list = copy.deepcopy(stack_list)
+                                            output_list.append(tmp_list)
+                                            tmp_list=[]
+                                        else:
+                                            stack_list[-2]['child'].append(stack_list[-1])
+
+                                        stack_list.pop()
+
+                                        wait_list.remove(wl)
+
                         if stack_list[-1]['name'] == splited[5]:
                             stack_list[-1]['arg']['used_time'] = splited[6]
                             stack_list[-1]['arg']['stop_time'] = logtime
@@ -155,12 +177,25 @@ class Log_to_graph(tree_opt):
                                 tmp_list=copy.deepcopy(stack_list)
                                 output_list.append(tmp_list)
                                 tmp_list=[]
+                                stack_list.pop()
                             else:
                                 stack_list[-2]['child'].append( stack_list[-1])
+                                stack_list.pop()
 
-                            stack_list.pop()
+                            wait_process()
+
+                        elif stack_list[-1]['name'] != splited[5]:
+                            """add wait_list,pop stack_list
+                            """
+                            wait_dict={"name":splited[5], "used_time":splited[6], "stop_time":logtime, "color":(0,(random.randrange(0,255,1)), (random.randrange(0,255,1)))}
+                            wait_list.append(wait_dict)
+
+                            wait_process()
+
             else:
                 break
+
+        logfile.close()
 
         """
         case for Error, not have end flag
