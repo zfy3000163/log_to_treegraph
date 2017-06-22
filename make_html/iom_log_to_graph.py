@@ -4,13 +4,35 @@ import random
 import time
 import datetime
 import copy
-#import plotly.plotly as py
-#import plotly.figure_factory as FF
 import pdb
 
 Level=50
 
-class tree_opt(object):
+
+"""
+dirname = sys.argv[1]
+opt = Log_to_graph()
+logdata = opt.log_format(dirname)
+print "logdata:%s\n\n" % logdata
+opt.make_html(logdata, "index.html")
+"""
+
+class Log_to_graph():
+    """
+    Class Log_to_graph:
+        Desc:When create instance and upload images,Draw a function call stack diagram
+        method:
+        log_format()
+            input:
+                log for str
+            output:
+                function's stack log for list
+        make_html()
+            input:
+                function's tree for list
+            output:
+                HTML markup language for str
+    """
     def __init__(self):
         self.bodystr=""
 
@@ -84,31 +106,11 @@ class tree_opt(object):
         HEX = '%02x%02x%02x' % (Red, Green, Blue)
         return HEX
 
-
-class Log_to_graph(tree_opt):
-
-    def __init__(self):
-        #tree_opt.__init__(self)
-        super(Log_to_graph, self).__init__()
-
-    def file_format(self, filename=None):
+    def log_format(self, log_list=None):
         #pdb.set_trace()
-        #filename = "/var/log/neutron/server.log"
-        #filename = "/tmp/server"
-        #filename = sys.argv[1]
-        assert(filename)
-        logfile = open(filename, 'r')
-
-        isiom = re.compile('\[iom]')
-        splitre = re.compile('\[[^]]*]' )
-        findid = re.compile('req[\w\-]*\s')
-        isbegin = re.compile('\[begin]')
-
-        ids = []
-        outputs = []
-        last = []
-        tmp = []
-        rdata=[]
+        assert(log_list)
+        if not isinstance(log_list, list):
+            return
 
         stack_list=[]
         output_list=[]
@@ -118,84 +120,126 @@ class Log_to_graph(tree_opt):
         arg_list=[]
         tree_dict={}
 
-        while True:
-            line = logfile.readline()
-            if line:
-                if isiom.search(line):
-                    line = line[0:-1]
-                    requestid = findid.search(splitre.search(line).group(0)).group(0)
-                    if requestid not in ids:
-                        ids.append(requestid)
-                        outputs.append([])
-                        #last.append(outputs[-1])
-                        last.append([])
+        def module_get_color(module_name=None):
+            return {"/usr/bin/nova-api":(65,105,225),
+                    "/usr/bin/nova-conductor":(95,158,160),
+                    "/usr/bin/nova-compute":(138,43,226),
+                    "/usr/bin/nova-scheduler":(255,215,0)
+                    }.get(module_name, (0,(random.randrange(0,255,1)), (random.randrange(0,255,1))))
 
-                    splited = splitre.split(line)
-                    #print splited
-                    #0-time,4-lastfun,5-fun,6-used/args, 7-args
-                    logtime = splited[0][0:23]
-                    n = ids.index(requestid)
-                    if isbegin.search(line):
-                        record = {"request_id":requestid,
-                                  "function_name":splited[5],
-                                  "sub_function":[],
-                                  "start_time":logtime,
-                                  "stop_time":'',
-                                  "used_time":'-1'}
+        for line in log_list:
+            #print "line:%s\n\n" % line
+            if isinstance(line, dict):
+                funcname_merg = line['host'] + "->"+ line['module_name'].split('/')[-1] + "->" + line['fun']
+                if line['start'] == 1:
+                    record = {"function_name": funcname_merg,
+                            "start_time":time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(line['time'])),
+                              "stop_time":'',
+                              "color":(255,0,0),
+                              "used_time":'-1'}
 
-                        arg_list.append(record)
-                        tree_dict={'name':splited[5], 'arg':record, 'child':[]}
-                        stack_list.append(tree_dict)
-                    else:
-                        """travers the wait_list
+                    arg_list.append(record)
+                    tree_dict={'name':funcname_merg, 'arg':record, 'child':[]}
+                    stack_list.append(tree_dict)
+                elif line['start'] == 0 and stack_list:
+                    """travers the wait_list
+                    """
+                    def wait_process():
+                        if wait_list and stack_list:
+                            #print "wait_list:%s\n\n" % (wait_list)
+                            for wl in wait_list:
+                                if wl['name'] == stack_list[-1]['name']:
+                                    stack_list[-1]['arg']['used_time'] = wl['used_time']
+                                    stack_list[-1]['arg']['stop_time'] = wl['stop_time']
+                                    stack_list[-1]['arg']['color'] = wl['color']
+
+                                    if len(stack_list) == 1 and stack_list[0]['name'] == wl['name']:
+                                        tmp_list = copy.deepcopy(stack_list)
+                                        output_list.append(tmp_list)
+                                        tmp_list=[]
+                                    else:
+                                        stack_list[-2]['child'].append(stack_list[-1])
+
+                                    stack_list.pop()
+
+                                    wait_list.remove(wl)
+
+                    if stack_list[-1]['name'] == funcname_merg:
+                        stack_list[-1]['arg']['used_time'] = line['usedtime']
+                        stack_list[-1]['arg']['stop_time'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(line['time']))
+                        stack_list[-1]['arg']['color'] = module_get_color(line['module_name'])
+
+                        if len(stack_list) == 1 and stack_list[0]['name'] == funcname_merg:
+                            tmp_list=copy.deepcopy(stack_list)
+                            output_list.append(tmp_list)
+                            tmp_list=[]
+                            stack_list.pop()
+                        else:
+                            stack_list[-2]['child'].append( stack_list[-1])
+                            stack_list.pop()
+
+                        wait_process()
+
+                    elif stack_list[-1]['name'] != funcname_merg:
                         """
-                        def wait_process():
-                            if wait_list and stack_list:
-                                for wl in wait_list:
-                                    if wl['name'] == stack_list[-1]['name']:
-                                        stack_list[-1]['arg']['used_time'] = wl['used_time']
-                                        stack_list[-1]['arg']['stop_time'] = wl['stop_time']
-                                        stack_list[-1]['arg']['color'] = wl['color']
+                        case for rpc cast
+                        """
+                        j = len(stack_list)
+                        find_flag = 1
+                        for i in range(1, j+1):
+                            if stack_list[j-i]['name'] == funcname_merg:
+                                #print "rpc:%s, %d, len:%d\n\n" % (stack_list[j-i]['name'], j-i, len(stack_list))
+                                find_flag = 0
+                                stack_list[j-i]['arg']['used_time'] = line['usedtime']
+                                stack_list[j-i]['arg']['stop_time'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(line['time']))
+                                stack_list[j-i]['arg']['color'] = module_get_color(line['module_name'])
 
-                                        if stack_list[0]['name'] == wl['name']:
-                                            tmp_list = copy.deepcopy(stack_list)
-                                            output_list.append(tmp_list)
-                                            tmp_list=[]
-                                        else:
-                                            stack_list[-2]['child'].append(stack_list[-1])
+                                if len(stack_list) == 1 and stack_list[0]['name'] == funcname_merg:
+                                    tmp_list=copy.deepcopy(stack_list)
+                                    output_list.append(tmp_list)
+                                    tmp_list=[]
+                                    stack_list.pop()
+                                else:
+                                    if j-i == 0:
+                                        tmp_list.append(stack_list[j-i])
+                                        tmp_list = copy.deepcopy(tmp_list)
+                                        output_list.append(tmp_list)
+                                        tmp_list=[]
+                                        stack_list.remove(stack_list[j-i])
+                                        pass
+                                    else:
+                                        stack_list[j-i-1]['child'].append( stack_list[j-i])
+                                        stack_list.remove(stack_list[j-i])
 
-                                        stack_list.pop()
+                                break
 
-                                        wait_list.remove(wl)
-
-                        if stack_list[-1]['name'] == splited[5]:
-                            stack_list[-1]['arg']['used_time'] = splited[6]
-                            stack_list[-1]['arg']['stop_time'] = logtime
-                            stack_list[-1]['arg']['color'] = (0,(random.randrange(0,255,1)), (random.randrange(0,255,1)))
-
-                            if stack_list[0]['name'] == splited[5]:
-                                tmp_list=copy.deepcopy(stack_list)
-                                output_list.append(tmp_list)
-                                tmp_list=[]
-                                stack_list.pop()
-                            else:
-                                stack_list[-2]['child'].append( stack_list[-1])
-                                stack_list.pop()
-
-                            wait_process()
-
-                        elif stack_list[-1]['name'] != splited[5]:
-                            """add wait_list,pop stack_list
-                            """
-                            wait_dict={"name":splited[5], "used_time":splited[6], "stop_time":logtime, "color":(0,(random.randrange(0,255,1)), (random.randrange(0,255,1)))}
+                        """add wait_list,pop stack_list
+                        """
+                        if find_flag:
+                            wait_dict={"name": funcname_merg, "used_time":line['usedtime'], "stop_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(line['time'])), \
+                                    "color":module_get_color(line['module_name'])}
                             wait_list.append(wait_dict)
 
                             wait_process()
+                else:
+                    print "else else:%s\n\n" % funcname_merg
+                    pass
 
             else:
                 break
+            #print "stack_list:%s\n\n, output:%s\n\n" % (stack_list, output_list)
 
-        logfile.close()
+        #print "for end\n\n"
+        #print "stack_list:%s\n\n, output:%s\n\n, wait_list:%s\n" % (stack_list, output_list, wait_list)
+        """
+        case for sequence reserve
+        """
+        if wait_list:
+            if len(stack_list) == 1:
+                wait_process()
+            else:
+                for i in range(len(stack_list)-1):
+                    wait_process()
 
         """
         case for Error, not have end flag
@@ -216,14 +260,15 @@ class Log_to_graph(tree_opt):
 
         return output_list
 
-    def make_html(self, logdata=None, output_file_path=None):
-        assert(output_file_path)
+
+    def make_html(self, logdata=None):
         assert(logdata)
-        fd = open(output_file_path,'w')
+        out_html= ''
 
         """
         write head
         """
+
         html_head = '<!DOCTYPE html>\n'\
                 '<html>\n'\
                 '<head>\n'\
@@ -238,19 +283,19 @@ class Log_to_graph(tree_opt):
                 '<script src="js/tree_jq.js"></script>\n'\
                 '<body>\n'\
                 '<div class="tree " >\n'
-        fd.write(html_head)
+
+
+        html_head += '<div class="tree" id="tree">\n'
+        out_html += html_head
 
         """
         write body
         """
-        #data = tree_opt.one_dim(self, logdata)
-        data = super(Log_to_graph, self).one_dim(logdata)
-        #body = ''
+        data = self.one_dim(logdata)
         for l in data:
-            #tree_opt.parse(self, l)
-            super(Log_to_graph, self).parse(l)
+            self.parse(l)
 
-        fd.write(self.bodystr)
+        out_html += self.bodystr
 
         """
         write tail
@@ -258,19 +303,8 @@ class Log_to_graph(tree_opt):
         html_tail = '</div>\n'\
                 '</body>\n'\
                 '</html>\n'
-        fd.write(html_tail)
+        out_html  += html_tail 
 
-        fd.close()
-
-
-
-
-"""
-dirname = sys.argv[1]
-opt = Log_to_graph()
-logdata = opt.file_format(dirname)
-print "logdata:%s\n\n" % logdata
-opt.make_html(logdata, "index.html")
-"""
+        return out_html
 
 
